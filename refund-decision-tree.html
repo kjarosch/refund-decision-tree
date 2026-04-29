@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Refund Ops Decision Tree — Approve / Deny Tool</title>
+<!--
+  =================================================================
+  REFUND OPS DECISION TREE
+  Built from "Lead Refunds (Pro)" KA (Article 000007615, v.105) and
+  the public-facing "Refund policy for pros" help center article.
+
+  AUDIENCE: Refund Ops team (decides approve / deny / PBI / escalate)
+  Use during IPR review.
+
+  Outcome types:
+    approve  - Approve as in-policy refund
+    pbi      - Approve as PBI / Courtesy credit
+    mixed    - Deny in-policy, consider PBI eligibility
+    deny     - Full denial
+    escalate - Manual review / T&S / IPO channel
+    auto     - System should have auto-handled — verify
+  =================================================================
+-->
+<style>
+  :root {
+    --brand: #006D5B;
+    --brand-light: #E6F5F1;
+    --brand-dark: #004D3F;
+
+    --approve: #047857; --approve-bg: #ECFDF5;
+    --pbi: #0E7490;     --pbi-bg: #ECFEFF;
+    --mixed: #B45309;   --mixed-bg: #FFFBEB;
+    --deny: #B91C1C;    --deny-bg: #FEF2F2;
+    --escalate: #7C3AED; --escalate-bg: #F5F3FF;
+    --auto: #1D4ED8;    --auto-bg: #EFF6FF;
+
+    --text: #111827;
+    --muted: #6B7280;
+    --bg: #F9FAFB;
+    --card: #FFFFFF;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.16);
+
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  .rt-root, .rt-root * { box-sizing: border-box; }
+  .rt-root {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 16px;
+    line-height: 1.5;
+    min-height: 500px;
+  }
+  .rt-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; gap: 12px;
+  }
+  .rt-title-block { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .rt-title { font-size: 18px; font-weight: 600; margin: 0; }
+  .rt-tag {
+    font-size: 10px; font-weight: 600; padding: 2px 8px;
+    background: var(--brand-light); color: var(--brand-dark);
+    border-radius: 999px; text-transform: uppercase; letter-spacing: 1px;
+  }
+  .rt-restart {
+    background: transparent; border: 1px solid var(--border-strong);
+    color: var(--text); padding: 6px 12px; font-size: 13px;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+  }
+  .rt-restart:hover { background: var(--card); }
+  .rt-subtitle {
+    font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.5;
+  }
+  .rt-crumbs {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px;
+    min-height: 28px; align-items: center;
+  }
+  .rt-crumb {
+    font-size: 12px; padding: 4px 10px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; cursor: pointer; color: var(--muted);
+    font-family: inherit;
+  }
+  .rt-crumb:hover { background: var(--brand-light); color: var(--brand-dark); }
+  .rt-crumb-sep { color: var(--muted); font-size: 11px; }
+  .rt-crumb-empty { font-size: 12px; color: var(--muted); }
+
+  .rt-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+  }
+  .rt-question {
+    font-size: 18px; font-weight: 500; margin: 0 0 6px; line-height: 1.4;
+  }
+  .rt-note {
+    font-size: 13px; color: var(--muted); margin: 0 0 18px;
+    background: var(--bg); padding: 10px 12px; border-radius: var(--radius-sm);
+    border-left: 3px solid var(--brand);
+  }
+  .rt-options { display: flex; flex-direction: column; gap: 8px; }
+  .rt-option {
+    text-align: left; padding: 14px 16px;
+    background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+    font-size: 14px; color: var(--text); line-height: 1.4;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    transition: border-color 0.1s, background 0.1s;
+  }
+  .rt-option:hover { border-color: var(--brand); background: var(--brand-light); }
+  .rt-option-arrow { color: var(--muted); font-size: 16px; }
+  .rt-back {
+    margin-top: 16px; background: transparent; border: none;
+    color: var(--muted); font-size: 13px; cursor: pointer;
+    font-family: inherit; padding: 4px 0;
+  }
+  .rt-back:hover { color: var(--text); }
+
+  .rt-outcome-banner {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    border-radius: var(--radius-sm); margin-bottom: 14px;
+  }
+  .rt-outcome-banner.approve  { background: var(--approve-bg);  color: var(--approve); }
+  .rt-outcome-banner.pbi      { background: var(--pbi-bg);      color: var(--pbi); }
+  .rt-outcome-banner.mixed    { background: var(--mixed-bg);    color: var(--mixed); }
+  .rt-outcome-banner.deny     { background: var(--deny-bg);     color: var(--deny); }
+  .rt-outcome-banner.escalate { background: var(--escalate-bg); color: var(--escalate); }
+  .rt-outcome-banner.auto     { background: var(--auto-bg);     color: var(--auto); }
+  .rt-outcome-icon {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255,255,255,0.6);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 16px;
+  }
+  .rt-outcome-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1.5px; opacity: 0.8;
+  }
+  .rt-outcome-title { font-size: 18px; font-weight: 600; margin: 0; }
+
+  .rt-code {
+    display: inline-block; padding: 4px 10px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-family: ui-monospace, monospace;
+    font-size: 12px; color: var(--text); margin-bottom: 14px;
+  }
+
+  .rt-section { margin-bottom: 16px; }
+  .rt-section-label {
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+  }
+  .rt-section-body { font-size: 14px; line-height: 1.6; color: var(--text); }
+
+  .rt-action {
+    background: var(--brand-light); color: var(--brand-dark);
+    padding: 12px 16px; border-radius: var(--radius-sm);
+    font-size: 14px; line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  .rt-action::before { content: "▶ "; opacity: 0.6; font-weight: 600; }
+
+  .rt-template-box {
+    position: relative; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 14px 16px; padding-right: 80px;
+    font-size: 13px; line-height: 1.6; white-space: pre-wrap;
+    color: var(--text); font-family: inherit;
+  }
+  .rt-copy {
+    position: absolute; top: 10px; right: 10px;
+    background: var(--card); border: 1px solid var(--border-strong);
+    color: var(--text); padding: 4px 10px; font-size: 12px;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+  }
+  .rt-copy:hover { background: var(--brand-light); border-color: var(--brand); }
+  .rt-copy.copied { background: var(--approve-bg); color: var(--approve); border-color: var(--approve); }
+
+  .rt-warning {
+    background: #FEF3C7; color: #92400E;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 500; margin-top: 10px;
+    border-left: 3px solid #F59E0B;
+  }
+  .rt-warning::before { content: "⚠ "; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="rt-root">
+  <div class="rt-header">
+    <div class="rt-title-block">
+      <h1 class="rt-title">Refund Ops Decision Tree</h1>
+      <span class="rt-tag">Approve / deny tool</span>
+    </div>
+    <button class="rt-restart" id="rt-restart">Start over</button>
+  </div>
+  <div class="rt-subtitle">
+    Walk through the IPR. Each path ends in a specific decision: in-policy refund, PBI courtesy credit, deny, or escalate.
+  </div>
+
+  <div class="rt-crumbs" id="rt-crumbs">
+    <span class="rt-crumb-empty">Start with the pre-flight check</span>
+  </div>
+
+  <div class="rt-card" id="rt-card"></div>
+</div>
+
+<script>
+(function(){
+  // =================================================================
+  // TREE — Refund Ops decision flow
+  // =================================================================
+  var TREE = {
+    start: {
+      type: "question",
+      label: "Pre-checks",
+      text: "Run pre-flight checks before reviewing the IPR.",
+      note: "Confirm: (1) within 45 days of charge, (2) pro not on refund gaming hold (Account Hold Logs), (3) pro is not a Thumbtack employee, friend, or family member.",
+      options: [
+        { label: "All pre-checks pass — review reason",       next: "reason_picker" },
+        { label: "Outside 45-day window",                     next: "deny_45_days" },
+        { label: "Pro is on a refund gaming hold",            next: "deny_gaming" },
+        { label: "Pro is employee / friend / family",         next: "escalate_ipo" }
+      ]
+    },
+
+    deny_45_days: {
+      type: "outcome", level: "deny", label: "Decision",
+      title: "Deny — outside 45-day window",
+      code: "Outside 45-day refund window",
+      reasoning: "Per policy, refund requests must be within 45 days of the charge. Outside this window, neither in-policy refunds nor PBIs apply.",
+      action: "Log denial with code 'Outside 45-day window'. Add admin note. Standard denial email sent automatically.",
+      template: "Hi [pro],\n\nThanks for reaching out. After reviewing your request, this charge falls outside our 45-day refund window, so I'm not able to issue a refund or courtesy credit. For future refund requests, please submit within 45 days of the charge — that's the window our policy can review.\n\nLet us know if there's anything else.\n\n— Refund Ops"
+    },
+
+    deny_gaming: {
+      type: "outcome", level: "deny", label: "Decision",
+      title: "Deny — refund gaming hold active",
+      code: "Refund gaming hold",
+      reasoning: "Pro is currently on hold for refund gaming (1st or 2nd warning, or deactivation). Per Account Holds (Pro) KA, deny refund without further review until hold is resolved.",
+      action: "Log denial with reason 'Refund gaming hold'. Reference Account Holds (Pro) KA. AST handles future requests once hold is resolved and pro acknowledges warning.",
+      template: "[No template — denial routed via standard system; AST handles communication when warnings are issued.]",
+      warning: "Don't share specific gaming detection methods. If pro asks why flagged, give only high-level explanation."
+    },
+
+    escalate_ipo: {
+      type: "outcome", level: "escalate", label: "Decision",
+      title: "Escalate — IPO readiness channel",
+      code: "Employee / affiliate review",
+      reasoning: "Per IPO readiness policy, refunds for Thumbtack employees, friends, or family members must go through dedicated review — even if in-policy. Tracking is in place to monitor and prevent these transactions.",
+      action: "Submit to IPR channel with full dispute details. DO NOT approve directly. Route through the documented IPO review process before any decision.",
+      template: ""
+    },
+
+    // ===== Reason picker =====
+    reason_picker: {
+      type: "question",
+      label: "Reason",
+      text: "What's the refund reason on the IPR?",
+      note: "If reason was submitted under 'Other', check whether it should be re-categorized (e.g., RPV check for invalid phone). Note for AI-handled categories below.",
+      options: [
+        { label: "Customer unresponsive",                                     next: "unresponsive_market" },
+        { label: "Customer hired someone else / pro not hired",               next: "not_hired_type" },
+        { label: "Customer canceled / put job on hold",                       next: "cancel_type" },
+        { label: "Job details changed significantly",                         next: "details_changed" },
+        { label: "Job outside preferences / wrong category",                  next: "preferences" },
+        { label: "Duplicate lead",                                            next: "duplicate" },
+        { label: "Invalid phone number",                                      next: "invalid_phone" },
+        { label: "Calendar / availability conflict",                          next: "calendar" },
+        { label: "Suspicious / scam / minor / third-party / TOS violation",   next: "trust_safety" },
+        { label: "Pricing dispute / 'not worth it'",                          next: "pricing_deny" },
+        { label: "Pro closing account / wants balance to card",               next: "closing_acct" }
+      ]
+    },
+
+    // ===== Customer unresponsive =====
+    unresponsive_market: {
+      type: "question",
+      label: "Pilot market?",
+      text: "Is the pro in an Unresponsive Customer Refund pilot market AND in the Thumbtack Numbers pilot?",
+      note: "Pilot markets (as of March 16, 2026): Atlanta, Houston, Portland (OR), Kansas City (MO), Tampa Bay, Baton Rouge.",
+      options: [
+        { label: "Yes — pilot market AND Thumbtack Numbers pilot", next: "unresponsive_pilot" },
+        { label: "No / standard market",                            next: "unresponsive_standard_pbi" }
+      ]
+    },
+    unresponsive_pilot: {
+      type: "question",
+      label: "Pilot criteria",
+      text: "Did all three criteria hold (verify in Enhanced Competition Insights)?",
+      note: "(1) Pro responded within 4 business hours. (2) Customer did not respond to ANY pro within 72 hours. (3) Pro kept communication on Thumbtack.",
+      options: [
+        { label: "Yes — all three criteria met",            next: "approve_pilot" },
+        { label: "No — at least one criterion not met",     next: "unresponsive_standard_pbi" }
+      ]
+    },
+    approve_pilot: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy (pilot auto)",
+      code: "Pilot — Unresponsive Customer Auto Refund",
+      reasoning: "All pilot criteria met: pro responded within 4 hrs, customer didn't respond to any pro within 72 hrs, comms kept on Thumbtack. Should have auto-refunded; if IPR was submitted, it's a backup.",
+      action: "Issue in-policy refund to Thumbtack balance. If auto-refund didn't fire originally, log as backup approval and note in admin: 'Pilot criteria met — manual approval after auto missed.' Reference Unresponsiveness Customer Refund Pilot KA.",
+      template: "Hi [pro],\n\nGood news — your refund qualifies under our Unresponsive Customer Refund pilot. I've credited the lead amount back to your Thumbtack balance, and you should see it shortly.\n\n— Refund Ops"
+    },
+    unresponsive_standard_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — consider PBI",
+      code: "APPROVED_WITHOUT_PROOF_JOB_DETAILS_CHANGED (PBI) or Denied",
+      reasoning: "Customer non-response is NOT in-policy outside the pilot. PBI possible if pro has eligible balance at time of processing.",
+      action: "1) Deny in-policy.\n2) Check pro's PBI eligibility (eligible balance at processing time).\n3) If eligible: issue PBI under APPROVED_WITHOUT_PROOF_JOB_DETAILS_CHANGED.\n4) If not eligible: full denial.",
+      template: "Hi [pro],\n\nThanks for reaching out. Customer non-response isn't covered by our refund policy, so I'm not able to issue an in-policy refund here. [If PBI eligible:] As a courtesy, I've credited the lead amount to your Thumbtack balance. [If not:] You only pay the first time a customer messages you — there's no extra charge to follow up, so feel free to reach out again.\n\n— Refund Ops"
+    },
+
+    // ===== Not hired =====
+    not_hired_type: {
+      type: "question",
+      label: "Lead type",
+      text: "Was this a Lead or an Opportunity, and was the customer's first response a clear 'no'?",
+      note: "Opportunities only: 'no thanks' as first response is in-policy. Examples: 'Don't need it', 'Sorry can't afford you', 'Already scheduled someone', 'No need at this time'.",
+      options: [
+        { label: "Opportunity + clear-no first response",    next: "approve_no_thanks" },
+        { label: "Opportunity + customer didn't like the pro / out of preferences", next: "not_hired_pbi" },
+        { label: "Lead, or any other 'not hired' situation", next: "not_hired_pbi" }
+      ]
+    },
+    approve_no_thanks: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy ('No Thank You')",
+      code: "Approved - No Thank You (Opportunities only)",
+      reasoning: "Opportunity + clear-no first response = in-policy refund. Per policy: 'No Thank You', 'Quote too high', 'Already hired someone else', 'Not needing at this time' all qualify.",
+      action: "Approve in-policy refund. Log under 'No Thank You'. Note: confirm via customer's first message in Thumbtack messages — must be a clear no, not 'I'll think about it'.",
+      template: "Hi [pro],\n\nThanks for reaching out. Since this was an Opportunity and the customer's first response indicated they weren't interested, this qualifies for a refund. I've credited the lead amount back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    not_hired_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — consider PBI under 'Not Hired'",
+      code: "APPROVED_NOT_HIRED (PBI) or Denied",
+      reasoning: "Not getting hired is NOT in-policy. Customer connected → charge valid. Includes 'customer didn't like the pro' and 'opportunity out of preferences'. PBI possible if eligible.",
+      action: "1) Deny in-policy.\n2) Check PBI eligibility.\n3) If eligible: issue PBI under APPROVED_NOT_HIRED.\n4) If not: full denial. Reference Refund Policy for Not hired or unresponsive customers section of KA.",
+      template: "Hi [pro],\n\nThanks for sharing. The charge is for the connection, which was made when the customer reached out — so this isn't covered by our refund policy. [If PBI:] As a courtesy, I've added a credit to your Thumbtack balance. [If not:] We can't guarantee the outcome of every lead, but the team here is happy to share tips on improving your hire rate.\n\n— Refund Ops"
+    },
+
+    // ===== Cancellation =====
+    cancel_type: {
+      type: "question",
+      label: "Cancel timing",
+      text: "When did the customer cancel?",
+      note: "Internal: do NOT share specific timing criteria with pros.",
+      options: [
+        { label: "Rapid (within ~1 hour, or up to 4hr enhanced eligibility)", next: "verify_auto_cancel" },
+        { label: "Later, or job put on hold after engagement",                next: "cancel_later_pbi" }
+      ]
+    },
+    verify_auto_cancel: {
+      type: "outcome", level: "auto", label: "Decision",
+      title: "Verify auto-refund — should be automatic",
+      code: "APPROVED_RAPID_CANCEL (Auto)",
+      reasoning: "Standard 1-hour cancellation refund is automatic. Enhanced 4-hour eligibility (multiple pros contacted, none received response, pro responded, customer canceled 1-4hr after contact) is also auto. If IPR submitted, check for auto-refund first.",
+      action: "Open Negotiations page in Admin → Logs → look for 'Canceled' followed by 'Refunded' shortly after. If auto-refund already processed: confirm IPR is duplicate, close ticket, notify pro. If criteria met but auto-refund didn't fire: approve in-policy as backup and flag system bug.",
+      template: "Hi [pro],\n\nGood news — that lead was already credited back to your Thumbtack balance automatically when the customer canceled. You should see it in your account.\n\n— Refund Ops"
+    },
+    cancel_later_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — consider PBI",
+      code: "APPROVED_JOB_CANCELLED (PBI) or Denied",
+      reasoning: "Cancellations / on-hold after engagement are NOT in-policy. Charge is valid (connection paid). PBI possible.",
+      action: "1) Deny in-policy.\n2) Check PBI eligibility.\n3) If eligible: PBI under APPROVED_JOB_CANCELLED.\n4) If not: full denial.",
+      template: "Hi [pro],\n\nThanks for reaching out. Our refund policy doesn't cover delayed or canceled jobs after engagement — Thumbtack charges for the initial connection. [If PBI:] As a courtesy, I've credited the lead amount to your Thumbtack balance. [If not:] The customer can pick up where they left off with you anytime — we keep you in their 'Team' for that reason.\n\n— Refund Ops"
+    },
+
+    // ===== Job details changed =====
+    details_changed: {
+      type: "question",
+      label: "Proof?",
+      text: "Is there proof in the Thumbtack message thread that the job changed?",
+      note: "In-policy requires Thumbtack message proof — ideally an exchange where the customer confirms the change.",
+      options: [
+        { label: "Yes — Thumbtack message proof present",      next: "approve_changed_proof" },
+        { label: "No proof, or proof from outside Thumbtack",  next: "changed_no_proof_pbi" }
+      ]
+    },
+    approve_changed_proof: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy",
+      code: "Approved With Proof Job Details Changed",
+      reasoning: "Job significantly changed + Thumbtack message proof = in-policy refund.",
+      action: "Approve in-policy. Log proof location in admin notes (link to specific message). Issue refund to Thumbtack balance.",
+      template: "Hi [pro],\n\nThanks for the details. After reviewing your messages, the job changed enough from the original lead to qualify for a refund. I've credited the lead amount back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    changed_no_proof_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — consider PBI",
+      code: "APPROVED_WITHOUT_PROOF_JOB_DETAILS_CHANGED (PBI) or Denied",
+      reasoning: "Without Thumbtack message proof, in-policy refund is not appropriate. PBI possible.",
+      action: "1) Deny in-policy.\n2) Check PBI eligibility.\n3) If eligible: PBI under APPROVED_WITHOUT_PROOF_JOB_DETAILS_CHANGED.\n4) If not: full denial.\n5) In email, coach pro on getting Thumbtack message proof for next time.",
+      template: "Hi [pro],\n\nThanks for sharing. To approve a 'job details changed' refund as in-policy, our team needs to see the change confirmed in your Thumbtack message thread with the customer. [If PBI:] As a courtesy, I've credited the lead back to your Thumbtack balance.\n\nFor next time: a quick message in Thumbtack like 'Just to confirm, you mentioned [X] now — is that right?' helps us approve future requests faster.\n\n— Refund Ops"
+    },
+
+    // ===== Job outside preferences =====
+    preferences: {
+      type: "question",
+      label: "Attachments?",
+      text: "Does the IPR include attachments, or is the pro disputing an LLM decision?",
+      note: "'Job Outside Preferences' is auto-evaluated by an LLM in two steps: in-policy refund check (lead vs targeting prefs at lead time), then PBI eligibility. LLM does NOT review the message thread. Requests with attachments are routed for manual review. DO NOT mention LLM/AI/automation to pros.",
+      options: [
+        { label: "No attachments, no dispute — LLM auto-handled",     next: "preferences_llm" },
+        { label: "Attachments present OR pro disputing LLM decision", next: "preferences_manual" }
+      ]
+    },
+    preferences_llm: {
+      type: "outcome", level: "auto", label: "Decision",
+      title: "LLM auto-handled — verify only",
+      code: "AUTO-PROCESS - [ai summary]",
+      reasoning: "No attachments and no dispute = LLM evaluates automatically. Two-step process: in-policy check first; if denied, PBI eligibility check. Admin note format: 'AUTO-PROCESS - [ai summary of reason]'.",
+      action: "Verify the AUTO-PROCESS note in admin. Decision is already issued. No manual action unless pro disputes — in which case, follow Steps: Help pro disputing a refund request decision.",
+      template: "[No template — system-generated email sent based on LLM decision.]",
+      warning: "Don't mention LLM/AI/automation to pros under any circumstance. Internal info only."
+    },
+    preferences_manual: {
+      type: "question",
+      label: "Manual review",
+      text: "After reviewing the lead category and pro's targeting preferences AT THE TIME of the lead, what's the assessment?",
+      note: "For 'owner' cases: only refundable if 'owner' was in the pro's targeting preferences at lead time. Otherwise no in-policy refund (PBI possible).",
+      options: [
+        { label: "Lead was outside pro's preferences at lead time",   next: "approve_preferences" },
+        { label: "Lead was within pro's preferences",                  next: "preferences_within_pbi" },
+        { label: "Non-owner case + 'owner' was NOT in pro's prefs",   next: "preferences_within_pbi" }
+      ]
+    },
+    approve_preferences: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy",
+      code: "Approved - Job Outside Preferences",
+      reasoning: "Lead category falls outside the targeting preferences the pro had set when the lead was sent.",
+      action: "Approve in-policy. Document targeting preferences as of lead timestamp in admin notes. If non-owner case: confirm 'owner' was in prefs at lead time.",
+      template: "Hi [pro],\n\nThanks for the details. After reviewing your targeting preferences against the lead, this one falls outside what you have set up to receive — so it qualifies for a refund. I've credited the lead amount back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    preferences_within_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — consider PBI",
+      code: "APPROVED_PRO_HAS_INCORRECT_PREFS (PBI) or Denied",
+      reasoning: "Lead matched pro's targeting preferences at the time. May be PBI eligible if pro genuinely had incorrect preferences set.",
+      action: "1) Deny in-policy.\n2) Check PBI eligibility.\n3) If eligible: PBI under APPROVED_PRO_HAS_INCORRECT_PREFS.\n4) If not: full denial.\n5) Coach pro to update preferences in email.",
+      template: "Hi [pro],\n\nThanks for reaching out. The lead does fall within the targeting preferences you have set up, so it's not eligible for an in-policy refund. [If PBI:] As a courtesy, I've credited the lead back to your Thumbtack balance. [Always:] To avoid similar leads in the future, you can adjust your service preferences here: [settings_url].\n\n— Refund Ops"
+    },
+
+    // ===== Duplicate =====
+    duplicate: {
+      type: "question",
+      label: "Timing",
+      text: "What's the timing situation?",
+      options: [
+        { label: "Both leads within 45 days of each other",                          next: "approve_duplicate" },
+        { label: "More than 45 days apart, but reported within 45 days of 2nd lead", next: "duplicate_old_pbi" },
+        { label: "More than 45 days apart, reported late",                           next: "deny_duplicate_old" }
+      ]
+    },
+    approve_duplicate: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy",
+      code: "Approved - Duplicate Lead",
+      reasoning: "Same customer (or related party with strong same-job signal, or same customer under new user PK) submitted similar request within 45 days = in-policy.",
+      action: "Verify per checklist:\n• Date created on both leads\n• Customer user PK (same or new for same person)\n• Customer name\n• Request details (similar enough?)\n• Pro/customer comms\n\nApprove in-policy refund.",
+      template: "Hi [pro],\n\nThanks for flagging. The same customer reached out for the same job within 45 days, so this qualifies as a duplicate. I've credited the lead amount back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    duplicate_old_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — consider PBI",
+      code: "Duplicate >45 days but reported timely",
+      reasoning: "Per policy table: duplicate leads >45 days apart but reported within 45 days of the 2nd lead are PBI eligible only.",
+      action: "1) Deny in-policy.\n2) Check PBI eligibility.\n3) If eligible: PBI.\n4) If not: full denial.",
+      template: "Hi [pro],\n\nThanks for the details. Duplicate leads only qualify for in-policy refunds when both come in within 45 days of each other — this pair is outside that window. [If PBI:] As a courtesy, I've credited the lead back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    deny_duplicate_old: {
+      type: "outcome", level: "deny", label: "Decision",
+      title: "Deny — outside all windows",
+      code: "Outside 45-day window",
+      reasoning: "Both leads >45 days apart AND reported >45 days after 2nd lead. Neither in-policy nor PBI applies.",
+      action: "Full denial.",
+      template: "Hi [pro],\n\nThanks for reaching out. Duplicate leads need to be reported within 45 days of the 2nd charge to qualify, and this one is outside that window. I'm not able to issue a refund or courtesy credit here.\n\n— Refund Ops"
+    },
+
+    // ===== Invalid phone =====
+    invalid_phone: {
+      type: "question",
+      label: "RPV result",
+      text: "What does RealPhoneValidation return on this number?",
+      note: "RPV result is in the Salesforce work ticket → 'Real Validation Phone Info' section. If reason was submitted as 'Other', change to 'Invalid phone number' to trigger RPV check.",
+      options: [
+        { label: "Invalid / Invalid-format / Disconnected / Disconnected-70 / Connected-75", next: "approve_invalid_phone" },
+        { label: "Connected — verify identity match next",                                    next: "phone_identity_check" },
+        { label: "Pro provided text screenshot proving number is unaffiliated",               next: "escalate_phone_ts" }
+      ]
+    },
+    approve_invalid_phone: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy",
+      code: "Approved - Invalid Phone Number",
+      reasoning: "RPV returned a status indicating the phone is invalid, disconnected, or low-confidence connected.",
+      action: "Approve in-policy refund.",
+      template: "Hi [pro],\n\nThanks for flagging. We checked the phone number and confirmed it isn't valid — so this qualifies for a refund. I've credited the lead back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    phone_identity_check: {
+      type: "question",
+      label: "Identity match",
+      text: "Does the customer name match (RPV subscriber name vs request name) AND is the phone SMS-verified?",
+      note: "Names don't need to be exact (e.g., 'John Smith' vs 'J Smith' is a match).",
+      options: [
+        { label: "Names match (or close) OR phone SMS-verified",                  next: "phone_match_pbi" },
+        { label: "Names DON'T match (or unavailable) AND phone NOT SMS-verified", next: "approve_phone_unmatched" }
+      ]
+    },
+    approve_phone_unmatched: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy (identity exception)",
+      code: "Approved - Invalid Phone (Identity unmatched)",
+      reasoning: "Connected phone + name doesn't match (or unavailable) + phone not SMS-verified = in-policy refund per policy exception.",
+      action: "Approve in-policy refund.",
+      template: "Hi [pro],\n\nThanks for flagging. After review, the phone number didn't match the customer's identity verification — this qualifies for a refund. I've credited the lead back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    phone_match_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — system auto-issues PBI if eligible",
+      code: "PBI auto-processed",
+      reasoning: "Connected phone + matching names OR SMS-verified = denied. System auto-issues PBI for eligible pros (no manual PBI action).",
+      action: "Deny in-policy. System handles PBI auto-issuance for eligible pros. No manual override needed unless pro disputes.",
+      template: "Hi [pro],\n\nThanks for reaching out. We checked the phone number — it's connected and matches our customer verification. This one doesn't qualify for a refund. [If PBI auto-issued:] As a courtesy, we've credited the lead back to your Thumbtack balance. We can't guarantee a customer will answer when you call.\n\n— Refund Ops"
+    },
+    escalate_phone_ts: {
+      type: "outcome", level: "escalate", label: "Decision",
+      title: "Escalate to Trust & Safety",
+      code: "T&S — possible suspicious phone",
+      reasoning: "Pro provided explicit proof (text screenshot) that the connected number belongs to someone unaffiliated with the project. Don't auto-deny — this may be fraud.",
+      action: "Reference Trust & Safety KA → Escalating to T&S → Reporting suspicious activity. Open T&S ticket. Hold refund decision pending T&S review.",
+      template: "[Hold communication pending T&S review.]"
+    },
+
+    // ===== Calendar =====
+    calendar: {
+      type: "question",
+      label: "Pro action",
+      text: "What did the pro do regarding scheduling?",
+      options: [
+        { label: "Offered alternative dates → customer rejected or didn't respond", next: "approve_calendar" },
+        { label: "Offered alternative dates → customer accepted",                    next: "calendar_accepted_review" },
+        { label: "Did NOT offer alternatives, or didn't respond",                    next: "deny_calendar_pbi" }
+      ]
+    },
+    approve_calendar: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy",
+      code: "Approved With Proof Job Details Changed",
+      reasoning: "Pro offered alternative dates and customer rejected (or didn't respond). Per policy table, this qualifies for in-policy refund.",
+      action: "Verify proof of alternative dates offered in Thumbtack messages. Approve in-policy refund.",
+      template: "Hi [pro],\n\nThanks for sharing. After reviewing your messages, you offered the customer alternative dates and they didn't go for them — this qualifies for a refund. I've credited the lead amount back to your Thumbtack balance.\n\n— Refund Ops"
+    },
+    calendar_accepted_review: {
+      type: "outcome", level: "escalate", label: "Decision",
+      title: "Review needed — unusual pattern",
+      code: "Manual review",
+      reasoning: "If customer accepted pro's alternative date, the calendar conflict is resolved — this shouldn't be a refund situation. May indicate pro confusion or different underlying issue.",
+      action: "Review case manually. Confirm with messages. May need to re-categorize or follow up with pro for clarification.",
+      template: ""
+    },
+    deny_calendar_pbi: {
+      type: "outcome", level: "mixed", label: "Decision",
+      title: "Deny in-policy — consider PBI",
+      code: "Denied Pro Reason Incorrect",
+      reasoning: "Pro didn't offer alternative dates or didn't respond to the customer = NOT in-policy. May be PBI eligible.",
+      action: "1) Deny in-policy under 'Denied Pro Reason Incorrect'.\n2) Check PBI eligibility.\n3) If eligible: PBI.\n4) If not: full denial. Coach in email.",
+      template: "Hi [pro],\n\nThanks for reaching out. For a calendar-conflict refund, our policy looks for you to offer alternative dates first — if the customer rejects them or doesn't respond, that qualifies you for a refund. [If PBI:] As a courtesy, I've credited the lead amount to your Thumbtack balance. For next time, sending a couple of options keeps the door open and unlocks a refund if it doesn't work out.\n\n— Refund Ops"
+    },
+
+    // ===== Trust & Safety =====
+    trust_safety: {
+      type: "question",
+      label: "T&S category",
+      text: "What's the specific concern?",
+      options: [
+        { label: "T&S already flagged TOS violation (auto-refund)",       next: "ts_auto" },
+        { label: "Job is from a minor (under 18)",                        next: "approve_ts" },
+        { label: "Job is from third party (e.g., hiring full-time staff)", next: "approve_ts" },
+        { label: "Suspicious / scam / questionable indicators",           next: "approve_ts" },
+        { label: "Customer used questionable/fake name only",             next: "ts_name_review" }
+      ]
+    },
+    ts_auto: {
+      type: "outcome", level: "auto", label: "Decision",
+      title: "Auto-refund already issued",
+      code: "TOS Violation - Auto",
+      reasoning: "T&S team flagged the lead as a TOS violation, which triggers an automatic refund.",
+      action: "Verify auto-refund processed. If IPR submitted, close as duplicate.",
+      template: "Hi [pro],\n\nGood news — our Trust and Safety team flagged this lead, and it's already been credited back to your Thumbtack balance. Thanks for reporting.\n\n— Refund Ops"
+    },
+    approve_ts: {
+      type: "outcome", level: "approve", label: "Decision",
+      title: "Approve — in-policy + T&S review",
+      code: "Approved - TOS Violation",
+      reasoning: "Confirmed minor / third-party / suspicious / TOS violation. In-policy refund AND user removal/review by T&S team.",
+      action: "Approve in-policy refund. Reference Removed or Banned Users (Pro) (Customer) KA for user removal steps. Coordinate with T&S as needed.",
+      template: "Hi [pro],\n\nThanks for flagging. After review, this lead violated our Terms of Use, so I've credited the lead amount back to your Thumbtack balance. Our team is also taking action on the customer's account.\n\n— Refund Ops"
+    },
+    ts_name_review: {
+      type: "outcome", level: "escalate", label: "Decision",
+      title: "Manual review — name alone is not enough",
+      code: "Manual review - Name only",
+      reasoning: "Per KA: be very careful determining a request is questionable based on name alone. Look for other signals on the customer profile (IP, behavior patterns, message content).",
+      action: "Look beyond the name: customer profile, IP, behavior, message content. Get input from Advanced Service Team or manager if uncertain. Don't deny refund solely because pro thinks the name is fake.",
+      template: ""
+    },
+
+    // ===== Pricing =====
+    pricing_deny: {
+      type: "outcome", level: "deny", label: "Decision",
+      title: "Deny — pricing dispute not refundable",
+      code: "Pro doesn't think job is worth the money / Customer budget constraints",
+      reasoning: "Per Denied refund reasons section: pro pricing disputes and customer budget constraints are not refundable. The connection itself is what's paid for.",
+      action: "Full denial. Possible educational follow-up on pricing communication.",
+      template: "Hi [pro],\n\nThanks for sharing. Our policy doesn't refund based on customer budget or pricing disagreements — the charge is for the connection, which was made when the customer reached out. Happy to share tips on framing pricing if that would help.\n\n— Refund Ops"
+    },
+
+    // ===== Closing account =====
+    closing_acct: {
+      type: "outcome", level: "deny", label: "Decision",
+      title: "Deny — balance not refundable to bank on close",
+      code: "Closing account - balance non-refundable",
+      reasoning: "Per Terms of Use: remaining balance is not refundable to bank on account closure. Pro can use balance on leads before closing. NEVER proactively offer to refund balance.",
+      action: "Don't proactively offer balance refund. If pro asks about balance: follow Transfer Pros Cashable Balance Back To Card KA. Determine reason for deactivation; coach where possible.",
+      template: "Hi [pro],\n\nThanks for reaching out. Your Thumbtack balance never expires and stays on your account, but per our Terms of Use, we're not able to refund the remaining balance to your bank when you close. The simplest path is to use the balance on future leads before closing the account.\n\n— Refund Ops",
+      warning: "If account is connected to a Thumbtack employee, friend, or family member: route through IPO channel. Tracking is in place to monitor these transactions."
+    }
+  };
+
+  // =================================================================
+  // RUNTIME
+  // =================================================================
+  var state = { current: "start", history: [] };
+  function $(id) { return document.getElementById(id); }
+
+  function render() {
+    var node = TREE[state.current];
+    var card = $("rt-card");
+    if (node.type === "question") {
+      card.innerHTML = renderQuestion(node);
+      document.querySelectorAll(".rt-option").forEach(function(b){
+        b.addEventListener("click", function(){
+          state.history.push({ id: state.current, label: node.label, optionLabel: b.dataset.label });
+          state.current = b.dataset.next;
+          render();
+        });
+      });
+      var back = $("rt-back");
+      if (back) back.addEventListener("click", goBack);
+    } else if (node.type === "outcome") {
+      card.innerHTML = renderOutcome(node);
+      var copyBtn = $("rt-copy");
+      if (copyBtn) copyBtn.addEventListener("click", copyTemplate);
+    }
+    renderCrumbs();
+  }
+
+  function renderQuestion(node) {
+    var optsHtml = node.options.map(function(o){
+      return ''
+        + '<button class="rt-option" data-next="' + escapeAttr(o.next) + '" data-label="' + escapeAttr(o.label) + '">'
+        +   '<span>' + escapeHtml(o.label) + '</span>'
+        +   '<span class="rt-option-arrow">›</span>'
+        + '</button>';
+    }).join("");
+    var noteHtml = node.note ? '<div class="rt-note">' + escapeHtml(node.note) + '</div>' : '';
+    var backHtml = state.history.length ? '<button class="rt-back" id="rt-back">← Back</button>' : '';
+    return ''
+      + '<h2 class="rt-question">' + escapeHtml(node.text) + '</h2>'
+      + noteHtml
+      + '<div class="rt-options">' + optsHtml + '</div>'
+      + backHtml;
+  }
+
+  function renderOutcome(node) {
+    var icons = { approve:"✓", pbi:"◐", mixed:"~", deny:"✗", escalate:"!", auto:"⟳" };
+    var labels = { approve:"Approve - In-policy", pbi:"Approve - PBI", mixed:"Deny + consider PBI", deny:"Deny", escalate:"Escalate", auto:"Auto-handled" };
+    var icon = icons[node.level] || "•";
+    var bannerLabel = labels[node.level] || "Decision";
+    var codeHtml = node.code ? '<div class="rt-code">' + escapeHtml(node.code) + '</div>' : '';
+    var templateHtml = (node.template && node.template.length > 0) ? ''
+      + '<div class="rt-section">'
+      +   '<div class="rt-section-label">Email to pro (edit before sending)</div>'
+      +   '<div class="rt-template-box">'
+      +     '<button class="rt-copy" id="rt-copy">Copy</button>'
+      +     escapeHtml(node.template)
+      +   '</div>'
+      + '</div>' : '';
+    var warningHtml = node.warning ? '<div class="rt-warning">' + escapeHtml(node.warning) + '</div>' : '';
+    return ''
+      + '<div class="rt-outcome-banner ' + node.level + '">'
+      +   '<div class="rt-outcome-icon">' + icon + '</div>'
+      +   '<div>'
+      +     '<div class="rt-outcome-label">' + bannerLabel + '</div>'
+      +     '<div class="rt-outcome-title">' + escapeHtml(node.title) + '</div>'
+      +   '</div>'
+      + '</div>'
+      + codeHtml
+      + '<div class="rt-section">'
+      +   '<div class="rt-section-label">Why</div>'
+      +   '<div class="rt-section-body">' + escapeHtml(node.reasoning) + '</div>'
+      + '</div>'
+      + '<div class="rt-section">'
+      +   '<div class="rt-section-label">Admin action</div>'
+      +   '<div class="rt-action">' + escapeHtml(node.action) + '</div>'
+      +   warningHtml
+      + '</div>'
+      + templateHtml
+      + '<button class="rt-back" id="rt-back" onclick="document.getElementById(\'rt-restart\').click()">← Start over</button>';
+  }
+
+  function renderCrumbs() {
+    var el = $("rt-crumbs");
+    if (state.history.length === 0) {
+      el.innerHTML = '<span class="rt-crumb-empty">Start with the pre-flight check</span>';
+      return;
+    }
+    var parts = [];
+    state.history.forEach(function(h, i){
+      parts.push('<button class="rt-crumb" data-index="' + i + '">' + escapeHtml(h.optionLabel) + '</button>');
+      parts.push('<span class="rt-crumb-sep">›</span>');
+    });
+    parts.pop();
+    el.innerHTML = parts.join("");
+    el.querySelectorAll(".rt-crumb").forEach(function(b){
+      b.addEventListener("click", function(){
+        var idx = parseInt(b.dataset.index, 10);
+        var target = state.history[idx].id;
+        state.history = state.history.slice(0, idx);
+        state.current = target;
+        render();
+      });
+    });
+  }
+
+  function goBack() {
+    if (state.history.length === 0) return;
+    var prev = state.history.pop();
+    state.current = prev.id;
+    render();
+  }
+
+  function reset() {
+    state = { current: "start", history: [] };
+    render();
+  }
+
+  function copyTemplate() {
+    var box = document.querySelector(".rt-template-box");
+    if (!box) return;
+    var text = box.textContent.replace(/^Copy/, "").trim();
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function(){
+        var btn = $("rt-copy");
+        btn.textContent = "Copied";
+        btn.classList.add("copied");
+        setTimeout(function(){ btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1500);
+      });
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function escapeAttr(s) {
+    return escapeHtml(s).replace(/"/g, "&quot;");
+  }
+
+  $("rt-restart").addEventListener("click", reset);
+  render();
+})();
+</script>
+
+</body>
+</html>
